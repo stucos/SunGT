@@ -9,7 +9,9 @@ Determination of Earth Station Antenna G/T Using the Sun or the Moon as an RF So
 
 from scipy.constants import Boltzmann as k
 from scipy.constants import speed_of_light as c
-from numpy import log10, pi, square, power
+from numpy import log10, pi, square, power, mean, array
+from datetime import datetime
+from WebData import WebData
 
 __author__ = 'Stuart Cossar'
 
@@ -17,8 +19,7 @@ class SunGT(object):
     """
 
     """
-    def __init__(self, measurement_frequency, beam_correction_factor, atmospheric_attenuation, flux_indices=None,
-                 measurement_time=None):
+    def __init__(self, measurement_frequency, beam_correction_factor, atmospheric_attenuation, measurement_time, flux_indices=None):
         """
 
         :param noise_delta: Delta of source noise power density to cold sky power density, linear no units
@@ -88,15 +89,17 @@ class SunGT(object):
         if self.flux_indices is None:
             self.flux_indices = self.get_flux_indices_noaa()
 
-        flux_freq_1 = self.flux_indices.keys[0]
-        flux_indices_1 = self.flux_indices.values[0]
-        flux_freq_2 = self.flux_indices.keys[1]
-        flux_indices_2 = self.flux_indices.values[0]
+        flux_freq_1 = float(list(self.flux_indices.keys())[0])
+        flux_indices_1 = float(list(self.flux_indices.values())[0])
+        flux_freq_2 = float(list(self.flux_indices.keys())[1])
+        flux_indices_2 = float(list(self.flux_indices.values())[1])
 
         # calculate Interpolation Exponent
         interpolation_exponent = (log10((self.measurement_frequency/flux_freq_2)))/(log10(flux_freq_1/flux_freq_2))
 
         self.sfd = flux_indices_2*power((flux_indices_1/flux_indices_2), interpolation_exponent)
+
+        print("Solar Flux Density: %s" % self.sfd)
         return self.sfd
 
     def get_flux_indices_noaa(self):
@@ -112,7 +115,51 @@ class SunGT(object):
         frequencies from 245 MHz to 15400 MHz
         :return: dict for flux indices for the two frequencies {freq_1:fi_1, frq_2:fi_2}
         """
+        # get all NOAA data
+        noaa_data = WebData().solar_radio_flux_data_noaa()
 
+        # parse the data to get frequencies below and above our test frequency
+        freqs_lower = []
+        freqs_higher = []
+        for frequency, flux_data_list in noaa_data['data_by_frequency'].items():
+            if float(frequency) <= self.measurement_frequency:
+                freqs_lower.append(int(frequency))
+            elif float(frequency) >= self.measurement_frequency:
+                freqs_higher.append(int(frequency))
 
+        # get max lower freq and min higher freq to get the two either side of ours
+        freq_1 = max(freqs_lower)
+        freq_2 = min(freqs_higher)
 
+        # get the flux data for the two frequencies for the time closest to our measurement time
+        flux_time = min(noaa_data['time_list'], key=lambda x: abs(x - datetime.strptime(self.measurement_time, '%Y %b %d %H:%M')))
+        # get the index of the time from the times list. as there are multiple meaurments at a single time, we need to get them all
+        time_element_list = [i for i, e in enumerate(noaa_data['time_list']) if e == flux_time]
 
+        # get the data for the times in the list for the frequency
+        flux_values_1 = []
+        flux_values_2 = []
+
+        for sample_time in time_element_list:
+            flux_value_1 = noaa_data['data_by_frequency'][str(freq_1)][sample_time]
+            flux_value_2 = noaa_data['data_by_frequency'][str(freq_2)][sample_time]
+            # do not add if the data is -1
+            if int(flux_value_1) != -1:
+                flux_values_1.append(float(flux_value_1))
+            if int(flux_value_2) != -1:
+                flux_values_2.append(float(flux_value_2))
+
+        print("Flux values for %s MHz: %s @ %s" % (freq_1, flux_values_1, [noaa_data['time_list'][x] for x in time_element_list]))
+        print("Flux values for %s MHz: %s @ %s" % (freq_2, flux_values_2, [noaa_data['time_list'][x] for x in time_element_list]))
+
+        return {freq_1: mean(array(flux_values_1)), freq_2: mean(array(flux_values_2))}
+
+if __name__ == "__main__":
+
+    measurement_frequency = 8000
+    beam_correction_factor = 0
+    atmospheric_attenuation = 0
+    measurement_time = '2019 Jan 12 12:23'
+
+    gt_obj = SunGT(measurement_frequency, beam_correction_factor, atmospheric_attenuation, measurement_time)
+    gt_obj.calculate_solar_flux_density()

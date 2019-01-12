@@ -1,5 +1,6 @@
 import requests
 import re
+from datetime import datetime
 
 __author__ = 'Stuart Cossar'
 
@@ -49,9 +50,8 @@ class WebData(object):
         freq_8_row = noaa_regex_groups[10].split()
         freq_9_row = noaa_regex_groups[11].split()
 
-
         noaa_dict = {
-            'date': date_of_data,
+            'date': datetime.strptime(date_of_data, ' %Y %b %d').date(),
             'data_by_frequency': {
                 freq_1_row[0]: freq_1_row[1:],
                 freq_2_row[0]: freq_2_row[1:],
@@ -63,21 +63,20 @@ class WebData(object):
                 freq_8_row[0]: freq_8_row[1:],
                 freq_9_row[0]: freq_9_row[1:],
             },
-            'time_list': times,
+            'time_list': [datetime.strptime(date_of_data + ' ' + str(x[:2]) + ':' + str(x[2:]), ' %Y %b %d %H:%M') for x in times],
             'measurement_site_list': sites
         }
+
+        # print(noaa_dict)
 
         return noaa_dict
 
     def solar_radio_flux_data_noaa(self):
         """
-
-        :return:
         """
         srf_data = self.get_noa_web_data()
         parse_noaa_data = self.noaa_to_dict(srf_data)
-
-
+        return parse_noaa_data
 
 if __name__ == "__main__":
     print(WebData().solar_radio_flux_data_noaa())
