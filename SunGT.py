@@ -22,12 +22,13 @@ class SunGT(object):
         """
 
         :param noise_delta: Delta of source noise power density to cold sky power density, linear no units
-        :param flux_density: Solar or Lunar Flux Density, expressed in Solar Flux Units. can be entered manually or retrieved automatically
+        :param flux_indices: a two member dict for flux indicies for two frequencies {freq_1:fi_1, frq_2:fi_2}
         :param wavelength: wavelength in metres
         :param beam_correction_factor: Beam Correction Factor, linear no units
         :param atmospheric_attenuation: Atmospheric Attenuation at elevation angle, linear no units
         """
         self.noise_delta = None
+        # flux_density: Solar or Lunar Flux Density, expressed in Solar Flux Units. can be entered manually or retrieved automatically
         self.fd = None
         self.flux_indices = flux_indices
         self.wavelength = self.calculate_wavelength(measurement_frequency)
@@ -86,13 +87,15 @@ class SunGT(object):
         if self.flux_indices is None:
             self.flux_indices = self.get_flux_indices_noaa()
 
-        flux_freq_1 = None
-        flux_freq_2 = None
+        flux_freq_1 = self.flux_indices.keys[0]
+        flux_indices_1 = self.flux_indices.values[0]
+        flux_freq_2 = self.flux_indices.keys[1]
+        flux_indices_2 = self.flux_indices.values[0]
 
         # calculate Interpolation Exponent
         interpolation_exponent = (log10((self.measurement_frequency/flux_freq_2)))/(log10(flux_freq_1/flux_freq_2))
 
-        self.sfd = self.flux_indices[1]*power((self.flux_indices[0]/self.flux_indices[1]), interpolation_exponent)
+        self.sfd = flux_indices_2*power((flux_indices_1/flux_indices_2), interpolation_exponent)
         return self.sfd
 
     def get_flux_indices_noaa(self):
