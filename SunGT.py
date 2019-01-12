@@ -17,8 +17,8 @@ class SunGT(object):
     """
 
     """
-    def __init__(self, measurement_frequency, beam_correction_factor,
-                 atmospheric_attenuation, flux_indices=None):
+    def __init__(self, measurement_frequency, beam_correction_factor, atmospheric_attenuation, flux_indices=None,
+                 measurement_time=None):
         """
 
         :param noise_delta: Delta of source noise power density to cold sky power density, linear no units
@@ -35,6 +35,7 @@ class SunGT(object):
         self.bcf = beam_correction_factor
         self.atmospheric_atten = atmospheric_attenuation
         self.measurement_frequency = measurement_frequency
+        self.measurement_time = measurement_time
 
     def g_over_t(self):
         """
@@ -109,7 +110,7 @@ class SunGT(object):
         Center. NOAA has stations scattered across the Earth
         that measure solar flux density at local noon at 9 different
         frequencies from 245 MHz to 15400 MHz
-        :return:
+        :return: dict for flux indices for the two frequencies {freq_1:fi_1, frq_2:fi_2}
         """
 
 
