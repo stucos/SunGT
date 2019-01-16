@@ -9,7 +9,7 @@ Determination of Earth Station Antenna G/T Using the Sun or the Moon as an RF So
 
 from scipy.constants import Boltzmann as k
 from scipy.constants import speed_of_light as c
-from numpy import log10, pi, square, power, mean, array
+from numpy import log10, pi, square, power, mean, array, exp
 from datetime import datetime
 from WebData import WebData
 
@@ -19,24 +19,34 @@ class SunGT(object):
     """
 
     """
-    def __init__(self, measurement_frequency, beam_correction_factor, atmospheric_attenuation, measurement_time, flux_indices=None):
+    def __init__(self, antenna_diameter, measurement_frequency, measurement_time, flux_indices=None):
         """
 
         :param noise_delta: Delta of source noise power density to cold sky power density, linear no units
         :param flux_indices: a two member dict for flux indicies for two frequencies {freq_1:fi_1, frq_2:fi_2}
         :param wavelength: wavelength in metres
-        :param beam_correction_factor: Beam Correction Factor, linear no units
-        :param atmospheric_attenuation: Atmospheric Attenuation at elevation angle, linear no units
         """
         self.noise_delta = None
         # flux_density: Solar or Lunar Flux Density, expressed in Solar Flux Units. can be entered manually or retrieved automatically
         self.fd = None
+        self.antenna_diameter = antenna_diameter
         self.flux_indices = flux_indices
-        self.wavelength = self.calculate_wavelength(measurement_frequency)
-        self.bcf = beam_correction_factor
-        self.atmospheric_atten = atmospheric_attenuation
+        self.wavelength = self.get_wavelength(measurement_frequency)
+        self.bcf = None
+        self.atmospheric_atten = None
         self.measurement_frequency = measurement_frequency
         self.measurement_time = measurement_time
+        """
+        The apparent angular diameter used in equation 14 is the
+        angular diameter of the object from an observer on the
+        Earth’s surface. This is also known as optical HPBW.
+        For the Sun, this value is typically defined as 0.525
+        degrees.
+        """
+        self.hpbw = 0.525
+        self.beam_correction_factor = self.get_beam_correction_factor()
+        self.beamwidth = self.get_beamwidth()
+        self.effective_rf_diameter = self.get_effective_rf_diameter()
 
     def g_over_t(self):
         """
@@ -46,7 +56,7 @@ class SunGT(object):
         gt = 10*log10((8*pi*k*(self.noise_delta-1))/(self.fd*square(self.wavelength)*self.bcf*self.atmospheric_atten))
         return gt
 
-    def calculate_noise_delta(self, source_power, cold_sky_power):
+    def get_noise_delta(self, source_power, cold_sky_power):
         """
         Calculate the noise delta - equation (3) and (4)
         The value y that is required for G/T calculation, represents the difference of received power from the RF
@@ -68,7 +78,7 @@ class SunGT(object):
         self.noise_delta = power(10, (delta_power/10))
         return  self.noise_delta
 
-    def calculate_wavelength(self, measurement_frequency):
+    def get_wavelength(self, measurement_frequency):
         """
         Calculate wavelength from frequency (in Hz) and speed of light - equation (5)
 
@@ -79,7 +89,7 @@ class SunGT(object):
         self.wavelength = c / measurement_frequency
         return self.wavelength
 
-    def calculate_solar_flux_density(self):
+    def get_solar_flux_density(self):
         """
         Calculate the flux density - equations (7) and (8)
         :param method:
@@ -99,8 +109,63 @@ class SunGT(object):
 
         self.sfd = flux_indices_2*power((flux_indices_1/flux_indices_2), interpolation_exponent)
 
-        print("Solar Flux Density: %s" % self.sfd)
         return self.sfd
+
+    def get_beamwidth(self):
+        """
+        Equation (15)
+
+        :return: Float - Beamwidth in degrees
+        """
+        self.beamwidth = 68.0 * (self.wavelength / self.antenna_diameter)
+        return self.beamwidth
+
+    def get_effective_rf_diameter(self):
+        """
+        equation (14)
+        Effective RF Diameter is a function of Beamwidth.
+
+        :return:
+        """
+        self.effective_rf_diameter = self.hpbw * (1.24 - (0.162 * log10(self.measurement_frequency)))
+        return self.effective_rf_diameter
+
+    def get_beam_correction_factor(self):
+        """
+        equation (13)
+
+        :return:
+        """
+        self.beam_correction_factor = (1 - exp(-square((self.effective_rf_diameter/self.beamwidth)) * log10(2)))/\
+                                      (square((self.effective_rf_diameter/self.beamwidth))*log10(2))
+
+        return self.beam_correction_factor
+
+    def get_atmospheric_attenuation(self):
+        """
+        Atmospheric attenuation is defined as the reduction in
+        power density of an electromagnetic wave as it
+        propagates through space, specifically referring to losses
+        due to atmospheric composition, elevation angle, clouds,
+        rain, and barometric pressure.
+
+        The expressions used to calculate losses due to
+        atmospheric attenuation are the same whether using the
+        Sun or the Moon as an RF source and are based on Annex
+        2 of ITU-R P.676-11 [8].
+
+        :return:
+        """
+        pass
+
+    def slant_path_attenuation(self):
+        """
+
+        :return:
+        """
+        pass
+
+
 
     def get_flux_indices_noaa(self):
         """
@@ -149,17 +214,19 @@ class SunGT(object):
             if int(flux_value_2) != -1:
                 flux_values_2.append(float(flux_value_2))
 
-        print("Flux values for %s MHz: %s @ %s" % (freq_1, flux_values_1, [noaa_data['time_list'][x] for x in time_element_list]))
-        print("Flux values for %s MHz: %s @ %s" % (freq_2, flux_values_2, [noaa_data['time_list'][x] for x in time_element_list]))
+        # print("Flux values for %s MHz: %s @ %s" % (freq_1, flux_values_1, [noaa_data['time_list'][x] for x in time_element_list]))
+        # print("Flux values for %s MHz: %s @ %s" % (freq_2, flux_values_2, [noaa_data['time_list'][x] for x in time_element_list]))
 
         return {freq_1: mean(array(flux_values_1)), freq_2: mean(array(flux_values_2))}
 
 if __name__ == "__main__":
 
-    measurement_frequency = 8000
-    beam_correction_factor = 0
-    atmospheric_attenuation = 0
+    antenna_diameter = 3.66 # meters
+    measurement_frequency = 8200000000 # Hz
     measurement_time = '2019 Jan 12 12:23'
+    flux_indices = {4995.0: 109, 8800.0: 235}
 
-    gt_obj = SunGT(measurement_frequency, beam_correction_factor, atmospheric_attenuation, measurement_time)
-    gt_obj.calculate_solar_flux_density()
+    gt_obj = SunGT(antenna_diameter, measurement_frequency, measurement_time, flux_indices=flux_indices)
+    print(gt_obj.get_solar_flux_density())
+    print(gt_obj.get_wavelength(measurement_frequency))
+    print(gt_obj.get_beamwidth())

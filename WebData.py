@@ -11,6 +11,7 @@ class WebData(object):
     """
     def __init__(self):
         self.noaa_solar_radio_flux_txt = 'http://services.swpc.noaa.gov/text/current-space-weather-indices.txt'
+        #self.noaa_solar_radio_flux_txt = ''
 
     def get_noa_web_data(self):
         """
