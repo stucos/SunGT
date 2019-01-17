@@ -209,12 +209,14 @@ class SunGT(object):
     def get_water_line_strength(self, itu_attenuation_1, itu_attenuation_2, water_vapor_pressure, temperature_k):
         """
         equation (19-2)
+
         :param itu_attenuation_1:
         :param itu_attenuation_2:
         :param water_vapor_pressure:
         :param temperature_k:
         :return:
-        "
+        """
+
         self.water_line_strength = itu_attenuation_1 * power(10, -1) * power(
             (water_vapor_pressure * (300.0 / temperature_k)), 3.5) * (itu_attenuation_2 * (1 - (300.0 / temperature_k)))
         return self.water_line_strength
