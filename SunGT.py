@@ -9,7 +9,7 @@ Determination of Earth Station Antenna G/T Using the Sun or the Moon as an RF So
 
 from scipy.constants import Boltzmann as k
 from scipy.constants import speed_of_light as c
-from numpy import log10, pi, square, power, mean, array, exp
+from numpy import log10, pi, square, power, mean, array, exp, sin
 from datetime import datetime
 from WebData import WebData
 
@@ -19,23 +19,13 @@ class SunGT(object):
     """
 
     """
-    def __init__(self, antenna_diameter, measurement_frequency, measurement_time, flux_indices=None):
+    def __init__(self):
         """
 
         :param noise_delta: Delta of source noise power density to cold sky power density, linear no units
         :param flux_indices: a two member dict for flux indicies for two frequencies {freq_1:fi_1, frq_2:fi_2}
         :param wavelength: wavelength in metres
         """
-        self.noise_delta = None
-        # flux_density: Solar or Lunar Flux Density, expressed in Solar Flux Units. can be entered manually or retrieved automatically
-        self.fd = None
-        self.antenna_diameter = antenna_diameter
-        self.flux_indices = flux_indices
-        self.wavelength = self.get_wavelength(measurement_frequency)
-        self.bcf = None
-        self.atmospheric_atten = None
-        self.measurement_frequency = measurement_frequency
-        self.measurement_time = measurement_time
         """
         The apparent angular diameter used in equation 14 is the
         angular diameter of the object from an observer on the
@@ -44,9 +34,6 @@ class SunGT(object):
         degrees.
         """
         self.hpbw = 0.525
-        self.beam_correction_factor = self.get_beam_correction_factor()
-        self.beamwidth = self.get_beamwidth()
-        self.effective_rf_diameter = self.get_effective_rf_diameter()
 
     def g_over_t(self):
         """
@@ -89,55 +76,55 @@ class SunGT(object):
         self.wavelength = c / measurement_frequency
         return self.wavelength
 
-    def get_solar_flux_density(self):
+    def get_solar_flux_density(self, measurement_frequency, flux_indices):
         """
         Calculate the flux density - equations (7) and (8)
         :param method:
         :return:
         """
         # check to see if we have specified a flux density, if not, get data from noaa
-        if self.flux_indices is None:
-            self.flux_indices = self.get_flux_indices_noaa()
+        if flux_indices is None:
+            flux_indices = self.get_flux_indices_noaa()
 
-        flux_freq_1 = float(list(self.flux_indices.keys())[0])
-        flux_indices_1 = float(list(self.flux_indices.values())[0])
-        flux_freq_2 = float(list(self.flux_indices.keys())[1])
-        flux_indices_2 = float(list(self.flux_indices.values())[1])
+        flux_freq_1 = float(list(flux_indices.keys())[0])
+        flux_indices_1 = float(list(flux_indices.values())[0])
+        flux_freq_2 = float(list(flux_indices.keys())[1])
+        flux_indices_2 = float(list(flux_indices.values())[1])
 
         # calculate Interpolation Exponent
-        interpolation_exponent = (log10((self.measurement_frequency/flux_freq_2)))/(log10(flux_freq_1/flux_freq_2))
+        interpolation_exponent = (log10((measurement_frequency/flux_freq_2)))/(log10(flux_freq_1/flux_freq_2))
 
         self.sfd = flux_indices_2*power((flux_indices_1/flux_indices_2), interpolation_exponent)
 
         return self.sfd
 
-    def get_beamwidth(self):
+    def get_beamwidth(self, wavelength, antenna_diameter):
         """
         Equation (15)
 
         :return: Float - Beamwidth in degrees
         """
-        self.beamwidth = 68.0 * (self.wavelength / self.antenna_diameter)
+        self.beamwidth = 68.0 * (wavelength / antenna_diameter)
         return self.beamwidth
 
-    def get_effective_rf_diameter(self):
+    def get_effective_rf_diameter(self, measurement_frequency, sun_hpbw=0.525):
         """
         equation (14)
         Effective RF Diameter is a function of Beamwidth.
 
         :return:
         """
-        self.effective_rf_diameter = self.hpbw * (1.24 - (0.162 * log10(self.measurement_frequency)))
+        self.effective_rf_diameter = sun_hpbw * (1.24 - (0.162 * log10((measurement_frequency/1000000000))))
         return self.effective_rf_diameter
 
-    def get_beam_correction_factor(self):
+    def get_beam_correction_factor(self, effective_rf_diameter, beamwidth):
         """
         equation (13)
+        # TODO: answer does not match example
 
         :return:
         """
-        self.beam_correction_factor = (1 - exp(-square((self.effective_rf_diameter/self.beamwidth)) * log10(2)))/\
-                                      (square((self.effective_rf_diameter/self.beamwidth))*log10(2))
+        self.beam_correction_factor = (1.0-(exp(-((effective_rf_diameter/beamwidth)**2)*log10(2.0))))/(((effective_rf_diameter/beamwidth)**2)*log10(2.0))
 
         return self.beam_correction_factor
 
@@ -158,14 +145,79 @@ class SunGT(object):
         """
         pass
 
-    def slant_path_attenuation(self):
+    def get_slant_path_attenuation(self, specific_atten_oxygen, equiv_height_dry_air, specific_atten_water_vapor,
+                               equiv_height_water_vapor, elevation_angle):
         """
+        Equation (16)
 
+        :param specific_atten_oxygen:
+        :param equiv_height_dry_air:
+        :param specific_atten_water_vapor:
+        :param equiv_height_water_vapor:
+        :param elevation_angle:
         :return:
         """
-        pass
 
+        self.slant_path_attenuation = ((specific_atten_oxygen*equiv_height_dry_air) +
+                                       (specific_atten_water_vapor*equiv_height_water_vapor))/sin(elevation_angle)
+        return self.slant_path_attenuation
 
+    def get_dry_air_specific_attenuation(self, measurement_frequency, i_oxygen_line_strength, oxygen_line_shape_factor,
+                                         dry_air_continuum):
+        """
+        equation (17)
+
+        :param measurement_frequency:
+        :param i_oxygen_line_strength:
+        :param oxygen_line_shape_factor:
+        :param dry_air_continuum:
+        :return:
+        """
+
+        self.dry_air_specific_attenuation = 0.1820*measurement_frequency*(i_oxygen_line_strength*oxygen_line_shape_factor + dry_air_continuum)
+        return self.dry_air_specific_attenuation
+
+    def get_water_vapor_specific_attenuation(self, measurement_frequency, i_water_vapor_line_strength,
+                                             water_vapor_line_shape_factor):
+        """
+        equation (18)
+
+        :param measurement_frequency:
+        :param i_oxygen_line_strength:
+        :param oxygen_line_shape_factor:
+        :param dry_air_continuum:
+        :return:
+        """
+
+        self.water_vapor_specific_attenuation = 0.1820*measurement_frequency*(i_water_vapor_line_strength*water_vapor_line_shape_factor)
+        return self.water_vapor_specific_attenuation
+
+    def get_oxygen_line_strength(self, itu_attenuation_1, itu_attenuation_2, dry_air_pressure, temperature_k):
+        """
+        equation (19-1)
+
+        :param itu_attenuation_1:
+        :param itu_attenuation_2:
+        :param dry_air_pressure:
+        :param temperature_k:
+        :return:
+        """
+
+        self.oxygen_line_strength = itu_attenuation_1 * power(10, -7)*power((dry_air_pressure*(300.0/temperature_k)), 3)*(itu_attenuation_2*(1-(300.0/temperature_k)))
+        return self.oxygen_line_strength
+
+    def get_water_line_strength(self, itu_attenuation_1, itu_attenuation_2, water_vapor_pressure, temperature_k):
+        """
+        equation (19-2)
+        :param itu_attenuation_1:
+        :param itu_attenuation_2:
+        :param water_vapor_pressure:
+        :param temperature_k:
+        :return:
+        "
+        self.water_line_strength = itu_attenuation_1 * power(10, -1) * power(
+            (water_vapor_pressure * (300.0 / temperature_k)), 3.5) * (itu_attenuation_2 * (1 - (300.0 / temperature_k)))
+        return self.water_line_strength
 
     def get_flux_indices_noaa(self):
         """
@@ -226,7 +278,13 @@ if __name__ == "__main__":
     measurement_time = '2019 Jan 12 12:23'
     flux_indices = {4995.0: 109, 8800.0: 235}
 
-    gt_obj = SunGT(antenna_diameter, measurement_frequency, measurement_time, flux_indices=flux_indices)
-    print(gt_obj.get_solar_flux_density())
-    print(gt_obj.get_wavelength(measurement_frequency))
-    print(gt_obj.get_beamwidth())
+    gt_obj = SunGT()
+    print('Solar FLux Density: %s SFU' % gt_obj.get_solar_flux_density(measurement_frequency, flux_indices))
+    wavelength = gt_obj.get_wavelength(measurement_frequency)
+    print("Wavelength: %s meters" % wavelength)
+    beamwidth = gt_obj.get_beamwidth(wavelength, antenna_diameter)
+    print("Beamwidth: %s degrees" % beamwidth)
+    sun_effective_rf_diameter = gt_obj.get_effective_rf_diameter(measurement_frequency)
+    print("Sun Effective RF diameter: %s degrees" % sun_effective_rf_diameter)
+    beam_correction_factor = gt_obj.get_beam_correction_factor(sun_effective_rf_diameter, beamwidth)
+    print("Beam correction factor: %s" % beam_correction_factor)
