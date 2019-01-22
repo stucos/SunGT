@@ -7,6 +7,7 @@ Determination of Earth Station Antenna G/T Using the Sun or the Moon as an RF So
 
 """
 
+import itur
 from scipy.constants import Boltzmann as k
 from scipy.constants import speed_of_light as c
 from numpy import log10, pi, square, power, mean, array, exp, sin
@@ -35,12 +36,16 @@ class SunGT(object):
         """
         self.hpbw = 0.525
 
-    def g_over_t(self):
+    def g_over_t(self, noise_delta, solar_flux_density, wavelength, beam_corr_factor, atmospheric_atten):
         """
         Calculate and return G/T - equation (1)
         :return: G/T
         """
-        gt = 10*log10((8*pi*k*(self.noise_delta-1))/(self.fd*square(self.wavelength)*self.bcf*self.atmospheric_atten))
+        # G/T = (Y - 1) * 8 * pi * k * L / (F * Lam^2)
+        # gt = 10*log10((8*pi*k*(noise_delta-1))/(solar_flux_density*(wavelength**2)*beam_corr_factor*atmospheric_atten))
+        # TODO: make work
+        gt = ((noise_delta - 1) * (8 * pi * k) * beam_corr_factor) / (solar_flux_density * (wavelength ** 2))
+
         return gt
 
     def get_noise_delta(self, source_power, cold_sky_power):
@@ -82,6 +87,8 @@ class SunGT(object):
         :param method:
         :return:
         """
+        # convert Hz to MHz
+        measurement_frequency = measurement_frequency/1000000
         # check to see if we have specified a flux density, if not, get data from noaa
         if flux_indices is None:
             flux_indices = self.get_flux_indices_noaa()
@@ -124,11 +131,15 @@ class SunGT(object):
 
         :return:
         """
-        self.beam_correction_factor = (1.0-(exp(-((effective_rf_diameter/beamwidth)**2)*log10(2.0))))/(((effective_rf_diameter/beamwidth)**2)*log10(2.0))
+        numerator_arr = array((-(effective_rf_diameter/beamwidth)**2)*log10(2.0))
+        numerator = 1.0-exp(numerator_arr)
+        denominator = ((effective_rf_diameter/beamwidth)**2)*log10(2.0)
 
+        self.beam_correction_factor = numerator / denominator
         return self.beam_correction_factor
 
-    def get_atmospheric_attenuation(self):
+    def get_atmospheric_attenuation(self, lat, lon, measurement_frequency, elevation, antenna_diameter,
+                                    unavailability=0.1, clear_skies=True):
         """
         Atmospheric attenuation is defined as the reduction in
         power density of an electromagnetic wave as it
@@ -143,83 +154,25 @@ class SunGT(object):
 
         :return:
         """
-        pass
-
-    def get_slant_path_attenuation(self, specific_atten_oxygen, equiv_height_dry_air, specific_atten_water_vapor,
-                               equiv_height_water_vapor, elevation_angle):
         """
-        Equation (16)
-
-        :param specific_atten_oxygen:
-        :param equiv_height_dry_air:
-        :param specific_atten_water_vapor:
-        :param equiv_height_water_vapor:
-        :param elevation_angle:
-        :return:
+        Ag: Gasious Attenuation 
+        Ac: Cloud attenuation 
+        Ar: rain attenuation 
+        As: Scintilation attenuation 
+        Att: total attenuation
         """
-
-        self.slant_path_attenuation = ((specific_atten_oxygen*equiv_height_dry_air) +
-                                       (specific_atten_water_vapor*equiv_height_water_vapor))/sin(elevation_angle)
-        return self.slant_path_attenuation
-
-    def get_dry_air_specific_attenuation(self, measurement_frequency, i_oxygen_line_strength, oxygen_line_shape_factor,
-                                         dry_air_continuum):
-        """
-        equation (17)
-
-        :param measurement_frequency:
-        :param i_oxygen_line_strength:
-        :param oxygen_line_shape_factor:
-        :param dry_air_continuum:
-        :return:
-        """
-
-        self.dry_air_specific_attenuation = 0.1820*measurement_frequency*(i_oxygen_line_strength*oxygen_line_shape_factor + dry_air_continuum)
-        return self.dry_air_specific_attenuation
-
-    def get_water_vapor_specific_attenuation(self, measurement_frequency, i_water_vapor_line_strength,
-                                             water_vapor_line_shape_factor):
-        """
-        equation (18)
-
-        :param measurement_frequency:
-        :param i_oxygen_line_strength:
-        :param oxygen_line_shape_factor:
-        :param dry_air_continuum:
-        :return:
-        """
-
-        self.water_vapor_specific_attenuation = 0.1820*measurement_frequency*(i_water_vapor_line_strength*water_vapor_line_shape_factor)
-        return self.water_vapor_specific_attenuation
-
-    def get_oxygen_line_strength(self, itu_attenuation_1, itu_attenuation_2, dry_air_pressure, temperature_k):
-        """
-        equation (19-1)
-
-        :param itu_attenuation_1:
-        :param itu_attenuation_2:
-        :param dry_air_pressure:
-        :param temperature_k:
-        :return:
-        """
-
-        self.oxygen_line_strength = itu_attenuation_1 * power(10, -7)*power((dry_air_pressure*(300.0/temperature_k)), 3)*(itu_attenuation_2*(1-(300.0/temperature_k)))
-        return self.oxygen_line_strength
-
-    def get_water_line_strength(self, itu_attenuation_1, itu_attenuation_2, water_vapor_pressure, temperature_k):
-        """
-        equation (19-2)
-
-        :param itu_attenuation_1:
-        :param itu_attenuation_2:
-        :param water_vapor_pressure:
-        :param temperature_k:
-        :return:
-        """
-
-        self.water_line_strength = itu_attenuation_1 * power(10, -1) * power(
-            (water_vapor_pressure * (300.0 / temperature_k)), 3.5) * (itu_attenuation_2 * (1 - (300.0 / temperature_k)))
-        return self.water_line_strength
+        Ag, Ac, Ar, As, Att = itur.atmospheric_attenuation_slant_path(lat, lon,
+                                                                      (measurement_frequency/1000000000)*itur.u.GHz,
+                                                                      elevation,
+                                                                      unavailability,
+                                                                      antenna_diameter*itur.u.m,
+                                                                      return_contributions=True)
+        # if clear skies (default) return only the gasious attenuation
+        if clear_skies:
+            self.atmospheric_atten = Ag.value
+            return Ag.value
+        self.atmospheric_atten = Att.value
+        return Att.value
 
     def get_flux_indices_noaa(self):
         """
@@ -279,14 +232,34 @@ if __name__ == "__main__":
     measurement_frequency = 8200000000 # Hz
     measurement_time = '2019 Jan 12 12:23'
     flux_indices = {4995.0: 109, 8800.0: 235}
+    lat = 32.8140
+    lon = -96.9489
+    elevation = 41.22 # degrees
+    source_power = -51.45 # dBm
+    cold_sky_power = -68.12 # dBm
 
     gt_obj = SunGT()
-    print('Solar FLux Density: %s SFU' % gt_obj.get_solar_flux_density(measurement_frequency, flux_indices))
-    wavelength = gt_obj.get_wavelength(measurement_frequency)
-    print("Wavelength: %s meters" % wavelength)
-    beamwidth = gt_obj.get_beamwidth(wavelength, antenna_diameter)
-    print("Beamwidth: %s degrees" % beamwidth)
-    sun_effective_rf_diameter = gt_obj.get_effective_rf_diameter(measurement_frequency)
-    print("Sun Effective RF diameter: %s degrees" % sun_effective_rf_diameter)
-    beam_correction_factor = gt_obj.get_beam_correction_factor(sun_effective_rf_diameter, beamwidth)
-    print("Beam correction factor: %s" % beam_correction_factor)
+
+    # noise_delta = gt_obj.get_noise_delta(source_power, cold_sky_power)
+    # print("Noise delta: %s" % noise_delta)
+    # solar_flux_density = gt_obj.get_solar_flux_density(measurement_frequency, flux_indices)
+    # print('Solar FLux Density: %s SFU' % solar_flux_density)
+    # wavelength = gt_obj.get_wavelength(measurement_frequency)
+    # print("Wavelength: %s meters" % wavelength)
+    # beamwidth = gt_obj.get_beamwidth(wavelength, antenna_diameter)
+    # print("Beamwidth: %s degrees" % beamwidth)
+    # sun_effective_rf_diameter = gt_obj.get_effective_rf_diameter(measurement_frequency)
+    # print("Sun Effective RF diameter: %s degrees" % sun_effective_rf_diameter)
+    # beam_correction_factor = gt_obj.get_beam_correction_factor(sun_effective_rf_diameter, beamwidth)
+    # print("Beam correction factor: %s" % beam_correction_factor)
+    # slant_path_attenuation = gt_obj.get_atmospheric_attenuation(lat, lon, measurement_frequency, elevation,
+    #                                                             antenna_diameter)
+    # print("Atmospheric attenuation: %s dB" % slant_path_attenuation)
+    #
+    # g_over_t = gt_obj.g_over_t(noise_delta, solar_flux_density, wavelength, beam_correction_factor,
+    #                            slant_path_attenuation)
+
+    # g_over_t(noise_delta, solar_flux_density, wavelength, beam_corr_factor, atmospheric_atten)
+    g_over_t = gt_obj.g_over_t(46.42, 213.532, 0.037, 0.786, 0.069)
+
+    print("G/T: %s" % g_over_t)
