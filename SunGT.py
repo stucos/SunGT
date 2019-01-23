@@ -41,12 +41,10 @@ class SunGT(object):
         Calculate and return G/T - equation (1)
         :return: G/T
         """
-        solar_flux_density = solar_flux_density*10**-22
+        sfd = solar_flux_density*10**-22 # convert to correct units
+        atmospheric_attenuation = power(10, (atmospheric_atten/10)) # turn to linear from dB
 
-        gt = 10*log10((8*pi*k*(noise_delta-1))/(solar_flux_density*(wavelength**2)*beam_corr_factor)) + atmospheric_atten
-        #gt = (8*pi*k*(noise_delta-1))/(solar_flux_density*(wavelength**2))
-        #gt = 10*log10((8*pi*k*(noise_delta-1))/((solar_flux_density*10**-22)*(wavelength**2)*beam_corr_factor*atmospheric_atten))
-        # TODO: make work
+        gt = 10*log10(((8*pi*k*(noise_delta-1))/(sfd*(wavelength**2)*beam_corr_factor*atmospheric_attenuation)))
 
         return gt
 
@@ -241,7 +239,7 @@ if __name__ == "__main__":
     cold_sky_power = -68.12 # dBm
 
     gt_obj = SunGT()
-
+    #
     noise_delta = gt_obj.get_noise_delta(source_power, cold_sky_power)
     print("Noise delta: %s" % noise_delta)
     solar_flux_density = gt_obj.get_solar_flux_density(measurement_frequency, flux_indices)
@@ -260,7 +258,5 @@ if __name__ == "__main__":
 
     g_over_t = gt_obj.g_over_t(noise_delta, solar_flux_density, wavelength, beam_correction_factor,
                                slant_path_attenuation)
-
-    # g_over_t = gt_obj.g_over_t(46.42, solar_flux_density, 0.037, 0.786, 0.069)
-
     print("G/T: %s" % g_over_t)
+
