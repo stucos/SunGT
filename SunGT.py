@@ -10,7 +10,7 @@ Determination of Earth Station Antenna G/T Using the Sun or the Moon as an RF So
 import itur
 from scipy.constants import Boltzmann as k
 from scipy.constants import speed_of_light as c
-from numpy import log10, pi, square, power, mean, array, exp, sin
+from numpy import log10, pi, square, power, mean, array, exp, sin, e
 from datetime import datetime
 from WebData import WebData
 
@@ -41,10 +41,12 @@ class SunGT(object):
         Calculate and return G/T - equation (1)
         :return: G/T
         """
-        # G/T = (Y - 1) * 8 * pi * k * L / (F * Lam^2)
-        # gt = 10*log10((8*pi*k*(noise_delta-1))/(solar_flux_density*(wavelength**2)*beam_corr_factor*atmospheric_atten))
+        solar_flux_density = solar_flux_density*10**-22
+
+        gt = 10*log10((8*pi*k*(noise_delta-1))/(solar_flux_density*(wavelength**2)*beam_corr_factor)) + atmospheric_atten
+        #gt = (8*pi*k*(noise_delta-1))/(solar_flux_density*(wavelength**2))
+        #gt = 10*log10((8*pi*k*(noise_delta-1))/((solar_flux_density*10**-22)*(wavelength**2)*beam_corr_factor*atmospheric_atten))
         # TODO: make work
-        gt = ((noise_delta - 1) * (8 * pi * k) * beam_corr_factor) / (solar_flux_density * (wavelength ** 2))
 
         return gt
 
@@ -240,26 +242,25 @@ if __name__ == "__main__":
 
     gt_obj = SunGT()
 
-    # noise_delta = gt_obj.get_noise_delta(source_power, cold_sky_power)
-    # print("Noise delta: %s" % noise_delta)
-    # solar_flux_density = gt_obj.get_solar_flux_density(measurement_frequency, flux_indices)
-    # print('Solar FLux Density: %s SFU' % solar_flux_density)
-    # wavelength = gt_obj.get_wavelength(measurement_frequency)
-    # print("Wavelength: %s meters" % wavelength)
-    # beamwidth = gt_obj.get_beamwidth(wavelength, antenna_diameter)
-    # print("Beamwidth: %s degrees" % beamwidth)
-    # sun_effective_rf_diameter = gt_obj.get_effective_rf_diameter(measurement_frequency)
-    # print("Sun Effective RF diameter: %s degrees" % sun_effective_rf_diameter)
-    # beam_correction_factor = gt_obj.get_beam_correction_factor(sun_effective_rf_diameter, beamwidth)
-    # print("Beam correction factor: %s" % beam_correction_factor)
-    # slant_path_attenuation = gt_obj.get_atmospheric_attenuation(lat, lon, measurement_frequency, elevation,
-    #                                                             antenna_diameter)
-    # print("Atmospheric attenuation: %s dB" % slant_path_attenuation)
-    #
-    # g_over_t = gt_obj.g_over_t(noise_delta, solar_flux_density, wavelength, beam_correction_factor,
-    #                            slant_path_attenuation)
+    noise_delta = gt_obj.get_noise_delta(source_power, cold_sky_power)
+    print("Noise delta: %s" % noise_delta)
+    solar_flux_density = gt_obj.get_solar_flux_density(measurement_frequency, flux_indices)
+    print('Solar FLux Density: %s SFU' % solar_flux_density)
+    wavelength = gt_obj.get_wavelength(measurement_frequency)
+    print("Wavelength: %s meters" % wavelength)
+    beamwidth = gt_obj.get_beamwidth(wavelength, antenna_diameter)
+    print("Beamwidth: %s degrees" % beamwidth)
+    sun_effective_rf_diameter = gt_obj.get_effective_rf_diameter(measurement_frequency)
+    print("Sun Effective RF diameter: %s degrees" % sun_effective_rf_diameter)
+    beam_correction_factor = gt_obj.get_beam_correction_factor(sun_effective_rf_diameter, beamwidth)
+    print("Beam correction factor: %s" % beam_correction_factor)
+    slant_path_attenuation = gt_obj.get_atmospheric_attenuation(lat, lon, measurement_frequency, elevation,
+                                                                antenna_diameter)
+    print("Atmospheric attenuation: %s dB" % slant_path_attenuation)
 
-    # g_over_t(noise_delta, solar_flux_density, wavelength, beam_corr_factor, atmospheric_atten)
-    g_over_t = gt_obj.g_over_t(46.42, 213.532, 0.037, 0.786, 0.069)
+    g_over_t = gt_obj.g_over_t(noise_delta, solar_flux_density, wavelength, beam_correction_factor,
+                               slant_path_attenuation)
+
+    # g_over_t = gt_obj.g_over_t(46.42, solar_flux_density, 0.037, 0.786, 0.069)
 
     print("G/T: %s" % g_over_t)
