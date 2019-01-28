@@ -34,7 +34,7 @@ class WebData(object):
         re_pattern = re.compile(':Solar_Radio_Flux:(.+)\n(.+)\n(.+)\n(.+)\n(.+)\n(.+)\n(.+)\n(.+)\n(.+)\n(.+)\n(.+)\n(.+)')
         # turn data in to list of the rows
         noaa_regex_groups_raw = re.findall(re_pattern, noaa_srf_data_file)[0]
-       # print(noaa_regex_groups)
+        # print(noaa_regex_groups)
         # strip '#' from list
         noaa_regex_groups = [s.strip('#') for s in noaa_regex_groups_raw]
         # parse the data from the rows

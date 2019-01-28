@@ -10,7 +10,7 @@ Determination of Earth Station Antenna G/T Using the Sun or the Moon as an RF So
 import itur
 from scipy.constants import Boltzmann as k
 from scipy.constants import speed_of_light as c
-from numpy import log10, pi, square, power, mean, array, exp, sin, e
+from numpy import log10, pi,power, mean, array, exp, log
 from datetime import datetime
 from WebData import WebData
 
@@ -112,6 +112,7 @@ class SunGT(object):
         :return: Float - Beamwidth in degrees
         """
         self.beamwidth = 68.0 * (wavelength / antenna_diameter)
+        # 68 or 70????
         return self.beamwidth
 
     def get_effective_rf_diameter(self, measurement_frequency, sun_hpbw=0.525):
@@ -131,11 +132,14 @@ class SunGT(object):
 
         :return:
         """
-        numerator_arr = array((-(effective_rf_diameter/beamwidth)**2)*log10(2.0))
+        numerator_arr = array((-(effective_rf_diameter/beamwidth)**2)*log(2.0))
         numerator = 1.0-exp(numerator_arr)
-        denominator = ((effective_rf_diameter/beamwidth)**2)*log10(2.0)
+        denominator = ((effective_rf_diameter/beamwidth)**2)*log(2.0)
 
         self.beam_correction_factor = numerator / denominator
+
+        # self.beam_correction_factor = 1 + 0.38*((effective_rf_diameter/beamwidth)**2)
+
         return self.beam_correction_factor
 
     def get_atmospheric_attenuation(self, lat, lon, measurement_frequency, elevation, antenna_diameter,
@@ -173,6 +177,19 @@ class SunGT(object):
             return Ag.value
         self.atmospheric_atten = Att.value
         return Att.value
+
+    def extrapolate_solar_flux(self, frequency, flux_10dot7cm):
+        """
+
+        :param frequency:
+        :return:
+        """
+        a = 0.0002
+        b = -0.01
+
+        flux = (a*flux_10dot7cm + b)*(frequency - 2800) + flux_10dot7cm
+
+        return flux
 
     def get_flux_indices_noaa(self):
         """
@@ -228,17 +245,30 @@ class SunGT(object):
 
 if __name__ == "__main__":
 
-    antenna_diameter = 3.66 # meters
-    measurement_frequency = 8200000000 # Hz
-    measurement_time = '2019 Jan 12 12:23'
-    flux_indices = {4995.0: 109, 8800.0: 235}
-    lat = 32.8140
-    lon = -96.9489
-    elevation = 41.22 # degrees
-    source_power = -51.45 # dBm
-    cold_sky_power = -68.12 # dBm
+    # antenna_diameter = 3.66 # meters
+    # measurement_frequency = 8200000000 # Hz
+    # measurement_time = '2019 Jan 12 12:23'
+    # flux_indices = {4995.0: 109, 8800.0: 235}
+    # lat = 32.8140
+    # lon = -96.9489
+    # elevation = 41.22 # degrees
+    # source_power = -51.45 # dBm
+    # cold_sky_power = -68.12 # dBm
+
+    antenna_diameter = 2.2  # meters
+    measurement_frequency = 12700000000  # Hz
+    measurement_time = '2019 Jan 02 03:12:22'
+    flux_indices = {8800.0: 216, 15400: 525}
+    lat = 32.2909615
+    lon = 34.865974
+    elevation = 38  # degrees
+    source_power = -50.99  # dBm
+    cold_sky_power = -63.438  # dBm
+    flux_10dot7cm = 75
+
 
     gt_obj = SunGT()
+    print(gt_obj.extrapolate_solar_flux(8800.0, flux_10dot7cm))
     #
     noise_delta = gt_obj.get_noise_delta(source_power, cold_sky_power)
     print("Noise delta: %s" % noise_delta)
@@ -259,4 +289,3 @@ if __name__ == "__main__":
     g_over_t = gt_obj.g_over_t(noise_delta, solar_flux_density, wavelength, beam_correction_factor,
                                slant_path_attenuation)
     print("G/T: %s" % g_over_t)
-
