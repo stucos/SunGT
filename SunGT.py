@@ -257,26 +257,15 @@ if __name__ == "__main__":
     # source_power = -51.45 # dBm
     # cold_sky_power = -68.12 # dBm
 
-    # antenna_diameter = 2.2  # meters
-    # measurement_frequency = 12700000000  # Hz
-    # measurement_time = '2019 Jan 02 03:12:22'
-    # flux_indices = {8800.0: 216, 15400: 525}
-    # lat = 32.2909615
-    # lon = 34.865974
-    # elevation = 38  # degrees
-    # source_power = -50.99  # dBm
-    # cold_sky_power = -63.438  # dBm
-    # flux_10dot7cm = 75
-
     antenna_diameter = 2.2  # meters
-    measurement_frequency = 17850000000  # Hz
+    measurement_frequency = 19300000000  # Hz
     measurement_time = '2019 Jan 02 03:12:22'
     flux_indices = {8800.0: 216, 15400: 525}
     lat = 32.2909615
     lon = 34.865974
     elevation = 38  # degrees
-    source_power = -42.585  # dBm
-    cold_sky_power = -55.115  # dBm
+    source_power = -44.598  # dBm
+    cold_sky_power = -57.005  # dBm
 
     gt_obj = SunGT()
     #
