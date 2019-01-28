@@ -178,16 +178,18 @@ class SunGT(object):
         self.atmospheric_atten = Att.value
         return Att.value
 
-    def extrapolate_solar_flux(self, frequency, flux_10dot7cm):
+    def extrapolate_solar_flux(self, frequency):
         """
+        from "10-60Ghz G/T measurments using the sun as a source - a preliminary study" William C. Daywitt
+        https://www.govinfo.gov/content/pkg/GOVPUB-C13-53a55ea34f3ca8aaacf289a9caa0bee6/pdf/GOVPUB-C13-53a55ea34f3ca8aaacf289a9caa0bee6.pdf
+        equation 4
 
         :param frequency:
         :return:
         """
-        a = 0.0002
-        b = -0.01
-
-        flux = (a*flux_10dot7cm + b)*(frequency - 2800) + flux_10dot7cm
+        frequency = frequency/1000000000.0
+        flux_log10 = 1.20 + 1.10*(log10(frequency)) + 0.179*(log10(frequency))**2
+        flux = power(10, flux_log10)
 
         return flux
 
@@ -255,24 +257,37 @@ if __name__ == "__main__":
     # source_power = -51.45 # dBm
     # cold_sky_power = -68.12 # dBm
 
+    # antenna_diameter = 2.2  # meters
+    # measurement_frequency = 12700000000  # Hz
+    # measurement_time = '2019 Jan 02 03:12:22'
+    # flux_indices = {8800.0: 216, 15400: 525}
+    # lat = 32.2909615
+    # lon = 34.865974
+    # elevation = 38  # degrees
+    # source_power = -50.99  # dBm
+    # cold_sky_power = -63.438  # dBm
+    # flux_10dot7cm = 75
+
     antenna_diameter = 2.2  # meters
-    measurement_frequency = 12700000000  # Hz
+    measurement_frequency = 17850000000  # Hz
     measurement_time = '2019 Jan 02 03:12:22'
     flux_indices = {8800.0: 216, 15400: 525}
     lat = 32.2909615
     lon = 34.865974
     elevation = 38  # degrees
-    source_power = -50.99  # dBm
-    cold_sky_power = -63.438  # dBm
-    flux_10dot7cm = 75
-
+    source_power = -42.585  # dBm
+    cold_sky_power = -55.115  # dBm
 
     gt_obj = SunGT()
-    print(gt_obj.extrapolate_solar_flux(8800.0, flux_10dot7cm))
     #
     noise_delta = gt_obj.get_noise_delta(source_power, cold_sky_power)
     print("Noise delta: %s" % noise_delta)
-    solar_flux_density = gt_obj.get_solar_flux_density(measurement_frequency, flux_indices)
+
+    if measurement_frequency > 15400000000:
+        solar_flux_density = gt_obj.extrapolate_solar_flux(measurement_frequency)
+    else:
+        solar_flux_density = gt_obj.get_solar_flux_density(measurement_frequency, flux_indices)
+
     print('Solar FLux Density: %s SFU' % solar_flux_density)
     wavelength = gt_obj.get_wavelength(measurement_frequency)
     print("Wavelength: %s meters" % wavelength)
