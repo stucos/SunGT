@@ -228,8 +228,9 @@ class SunGT(object):
         freq_2 = min(freqs_higher)
 
         # get the flux data for the two frequencies for the time closest to our measurement time
+        # print(noaa_data['time_list'])
         try:
-            flux_time = min(noaa_data['time_list'], key=lambda x: abs(x - datetime.strptime(test_time, '%H:%M')))
+            flux_time = min(noaa_data['time_list'], key=lambda x: abs(x - datetime.strptime('%s %s' % (test_date, test_time), '%Y %b %d %H:%M')))
         except ValueError:
             print("Invalid test time")
             exit(1)
@@ -254,12 +255,48 @@ class SunGT(object):
 
         return {freq_1: mean(array(flux_values_1)), freq_2: mean(array(flux_values_2))}
 
+    def calculate_g_t(self, measurement_frequency, flux_indices, measurement_date, measurement_time,
+                      source_power, cold_sky_power, antenna_diameter, lat, lon, elevation):
+        """
+
+        :param measurement_frequency:
+        :param flux_indices:
+        :param measurement_date:
+        :param measurement_time:
+        :param source_power:
+        :param cold_sky_power:
+        :param antenna_diameter:
+        :param lat:
+        :param lon:
+        :param elevation:
+        :return:
+        """
+        solar_flux_density = self.get_solar_flux_density(measurement_frequency, flux_indices, measurement_date,
+                                                           measurement_time)
+        print('Solar FLux Density: %s SFU' % solar_flux_density)
+        noise_delta = self.get_noise_delta(source_power, cold_sky_power)
+        print("Noise delta: %s" % noise_delta)
+        wavelength = self.get_wavelength(measurement_frequency)
+        print("Wavelength: %s meters" % wavelength)
+        beamwidth = self.get_beamwidth(wavelength, antenna_diameter)
+        print("Beamwidth: %s degrees" % beamwidth)
+        sun_effective_rf_diameter = self.get_effective_rf_diameter(measurement_frequency)
+        print("Sun Effective RF diameter: %s degrees" % sun_effective_rf_diameter)
+        beam_correction_factor = self.get_beam_correction_factor(sun_effective_rf_diameter, beamwidth)
+        print("Beam correction factor: %s" % beam_correction_factor)
+        slant_path_attenuation = self.get_atmospheric_attenuation(lat, lon, measurement_frequency, elevation,
+                                                                    antenna_diameter)
+        print("Atmospheric attenuation: %s dB" % slant_path_attenuation)
+        g_over_t = self.g_over_t(noise_delta, solar_flux_density, wavelength, beam_correction_factor,
+                                   slant_path_attenuation)
+        print("G/T: %s" % g_over_t)
+
 if __name__ == "__main__":
 
     antenna_diameter = 2.2  # meters
     measurement_frequency = 10700000000  # Hz
     measurement_date = '2019 Jan 2'
-    measurement_time = '03:12'
+    measurement_time = '17:00'
     #flux_indices = {8800.0: 216, 15400: 525}
     flux_indices = None
     lat = 32.2909615
@@ -269,24 +306,5 @@ if __name__ == "__main__":
     cold_sky_power = -63.438# dBm
 
     gt_obj = SunGT()
-    #
-
-    solar_flux_density = gt_obj.get_solar_flux_density(measurement_frequency, flux_indices, measurement_date, measurement_time)
-    print('Solar FLux Density: %s SFU' % solar_flux_density)
-    noise_delta = gt_obj.get_noise_delta(source_power, cold_sky_power)
-    print("Noise delta: %s" % noise_delta)
-    wavelength = gt_obj.get_wavelength(measurement_frequency)
-    print("Wavelength: %s meters" % wavelength)
-    beamwidth = gt_obj.get_beamwidth(wavelength, antenna_diameter)
-    print("Beamwidth: %s degrees" % beamwidth)
-    sun_effective_rf_diameter = gt_obj.get_effective_rf_diameter(measurement_frequency)
-    print("Sun Effective RF diameter: %s degrees" % sun_effective_rf_diameter)
-    beam_correction_factor = gt_obj.get_beam_correction_factor(sun_effective_rf_diameter, beamwidth)
-    print("Beam correction factor: %s" % beam_correction_factor)
-    slant_path_attenuation = gt_obj.get_atmospheric_attenuation(lat, lon, measurement_frequency, elevation,
-                                                                antenna_diameter)
-    print("Atmospheric attenuation: %s dB" % slant_path_attenuation)
-
-    g_over_t = gt_obj.g_over_t(noise_delta, solar_flux_density, wavelength, beam_correction_factor,
-                               slant_path_attenuation)
-    print("G/T: %s" % g_over_t)
+    g_t = gt_obj.calculate_g_t(measurement_frequency, flux_indices, measurement_date, measurement_time, source_power,
+                               cold_sky_power, antenna_diameter, lat, lon, elevation)

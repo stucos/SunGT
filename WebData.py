@@ -76,7 +76,7 @@ class WebData(object):
                 freq_8_row[0]: freq_8_row[1:],
                 freq_9_row[0]: freq_9_row[1:],
             },
-            'time_list': [datetime.strptime(date_of_data + ' ' + str(x[:2]) + ':' + str(x[2:]), '%Y %b %d %H:%M') for x in times],
+            'time_list': [datetime.strptime('%s %s' % (date_of_data, x), '%Y %b %d %H%M') for x in times],
             'measurement_site_list': sites
         }
 
