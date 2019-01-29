@@ -81,28 +81,33 @@ class SunGT(object):
         self.wavelength = c / measurement_frequency
         return self.wavelength
 
-    def get_solar_flux_density(self, measurement_frequency, flux_indices):
+    def get_solar_flux_density(self, measurement_frequency, flux_indices, test_date, test_time):
         """
         Calculate the flux density - equations (7) and (8)
         :param method:
         :return:
         """
+        # check to see if freq is above what noaa provide. if so, use quiet sun approximation
+        if measurement_frequency > 15400000000:
+            solar_flux_density = gt_obj.extrapolate_solar_flux(measurement_frequency)
+            return solar_flux_density
+
         # convert Hz to MHz
         measurement_frequency = measurement_frequency/1000000
         # check to see if we have specified a flux density, if not, get data from noaa
         if flux_indices is None:
-            flux_indices = self.get_flux_indices_noaa()
+            flux_indices = self.get_flux_indices_noaa(test_date, test_time, measurement_frequency)
 
         flux_freq_1 = float(list(flux_indices.keys())[0])
         flux_indices_1 = float(list(flux_indices.values())[0])
         flux_freq_2 = float(list(flux_indices.keys())[1])
         flux_indices_2 = float(list(flux_indices.values())[1])
 
+        # print("SFD retrieved from Web: %s Mhz: %s, %s MHz: %s" % (flux_freq_1, flux_indices_1, flux_freq_2, flux_indices_2))
         # calculate Interpolation Exponent
         interpolation_exponent = (log10((measurement_frequency/flux_freq_2)))/(log10(flux_freq_1/flux_freq_2))
 
         self.sfd = flux_indices_2*power((flux_indices_1/flux_indices_2), interpolation_exponent)
-
         return self.sfd
 
     def get_beamwidth(self, wavelength, antenna_diameter):
@@ -193,7 +198,7 @@ class SunGT(object):
 
         return flux
 
-    def get_flux_indices_noaa(self):
+    def get_flux_indices_noaa(self, test_date, test_time, measurement_frequency):
         """
         The industry standard method for obtaining a value for
         solar flux density when a direct measurement is not
@@ -207,15 +212,15 @@ class SunGT(object):
         :return: dict for flux indices for the two frequencies {freq_1:fi_1, frq_2:fi_2}
         """
         # get all NOAA data
-        noaa_data = WebData().solar_radio_flux_data_noaa()
+        noaa_data = WebData().solar_radio_flux_data_noaa(test_date)
 
         # parse the data to get frequencies below and above our test frequency
         freqs_lower = []
         freqs_higher = []
         for frequency, flux_data_list in noaa_data['data_by_frequency'].items():
-            if float(frequency) <= self.measurement_frequency:
+            if float(frequency) <= measurement_frequency:
                 freqs_lower.append(int(frequency))
-            elif float(frequency) >= self.measurement_frequency:
+            elif float(frequency) >= measurement_frequency:
                 freqs_higher.append(int(frequency))
 
         # get max lower freq and min higher freq to get the two either side of ours
@@ -223,7 +228,11 @@ class SunGT(object):
         freq_2 = min(freqs_higher)
 
         # get the flux data for the two frequencies for the time closest to our measurement time
-        flux_time = min(noaa_data['time_list'], key=lambda x: abs(x - datetime.strptime(self.measurement_time, '%Y %b %d %H:%M')))
+        try:
+            flux_time = min(noaa_data['time_list'], key=lambda x: abs(x - datetime.strptime(test_time, '%H:%M')))
+        except ValueError:
+            print("Invalid test time")
+            exit(1)
         # get the index of the time from the times list. as there are multiple meaurments at a single time, we need to get them all
         time_element_list = [i for i, e in enumerate(noaa_data['time_list']) if e == flux_time]
 
@@ -240,44 +249,32 @@ class SunGT(object):
             if int(flux_value_2) != -1:
                 flux_values_2.append(float(flux_value_2))
 
-        # print("Flux values for %s MHz: %s @ %s" % (freq_1, flux_values_1, [noaa_data['time_list'][x] for x in time_element_list]))
-        # print("Flux values for %s MHz: %s @ %s" % (freq_2, flux_values_2, [noaa_data['time_list'][x] for x in time_element_list]))
+        print("Flux values (from NOAA web) for %s MHz: %s @ %s" % (freq_1, flux_values_1[0], [noaa_data['time_list'][x] for x in time_element_list][0].strftime('%Y-%m-%d %H:%M')))
+        print("Flux values (from NOAA web) for %s MHz: %s @ %s" % (freq_2, flux_values_2[0], [noaa_data['time_list'][x] for x in time_element_list][0].strftime('%Y-%m-%d %H:%M')))
 
         return {freq_1: mean(array(flux_values_1)), freq_2: mean(array(flux_values_2))}
 
 if __name__ == "__main__":
 
-    # antenna_diameter = 3.66 # meters
-    # measurement_frequency = 8200000000 # Hz
-    # measurement_time = '2019 Jan 12 12:23'
-    # flux_indices = {4995.0: 109, 8800.0: 235}
-    # lat = 32.8140
-    # lon = -96.9489
-    # elevation = 41.22 # degrees
-    # source_power = -51.45 # dBm
-    # cold_sky_power = -68.12 # dBm
-
     antenna_diameter = 2.2  # meters
-    measurement_frequency = 19300000000  # Hz
-    measurement_time = '2019 Jan 02 03:12:22'
-    flux_indices = {8800.0: 216, 15400: 525}
+    measurement_frequency = 10700000000  # Hz
+    measurement_date = '2019 Jan 2'
+    measurement_time = '03:12'
+    #flux_indices = {8800.0: 216, 15400: 525}
+    flux_indices = None
     lat = 32.2909615
     lon = 34.865974
     elevation = 38  # degrees
-    source_power = -44.598  # dBm
-    cold_sky_power = -57.005  # dBm
+    source_power = -50.99  # dBm
+    cold_sky_power = -63.438# dBm
 
     gt_obj = SunGT()
     #
+
+    solar_flux_density = gt_obj.get_solar_flux_density(measurement_frequency, flux_indices, measurement_date, measurement_time)
+    print('Solar FLux Density: %s SFU' % solar_flux_density)
     noise_delta = gt_obj.get_noise_delta(source_power, cold_sky_power)
     print("Noise delta: %s" % noise_delta)
-
-    if measurement_frequency > 15400000000:
-        solar_flux_density = gt_obj.extrapolate_solar_flux(measurement_frequency)
-    else:
-        solar_flux_density = gt_obj.get_solar_flux_density(measurement_frequency, flux_indices)
-
-    print('Solar FLux Density: %s SFU' % solar_flux_density)
     wavelength = gt_obj.get_wavelength(measurement_frequency)
     print("Wavelength: %s meters" % wavelength)
     beamwidth = gt_obj.get_beamwidth(wavelength, antenna_diameter)
