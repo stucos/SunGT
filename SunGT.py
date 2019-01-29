@@ -89,6 +89,7 @@ class SunGT(object):
         """
         # check to see if freq is above what noaa provide. if so, use quiet sun approximation
         if measurement_frequency > 15400000000:
+            print("Measurement frequency above NOAA observations, using least-square fitting equation")
             solar_flux_density = gt_obj.extrapolate_solar_flux(measurement_frequency)
             return solar_flux_density
 
@@ -294,7 +295,7 @@ class SunGT(object):
 if __name__ == "__main__":
 
     antenna_diameter = 2.2  # meters
-    measurement_frequency = 10700000000  # Hz
+    measurement_frequency = 19300000000  # Hz
     measurement_date = '2019 Jan 2'
     measurement_time = '17:00'
     #flux_indices = {8800.0: 216, 15400: 525}
@@ -302,8 +303,8 @@ if __name__ == "__main__":
     lat = 32.2909615
     lon = 34.865974
     elevation = 38  # degrees
-    source_power = -50.99  # dBm
-    cold_sky_power = -63.438# dBm
+    source_power = -43.72  # dBm
+    cold_sky_power = -55.836 # dBm
 
     gt_obj = SunGT()
     g_t = gt_obj.calculate_g_t(measurement_frequency, flux_indices, measurement_date, measurement_time, source_power,
